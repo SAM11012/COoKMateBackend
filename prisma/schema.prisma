@@ -1,0 +1,56 @@
+datasource db {
+  provider = "postgresql" // change to "postgresql" or "mysql" if needed
+  url      = "prisma+postgres://accelerate.prisma-data.net/?api_key=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqd3RfaWQiOjEsInNlY3VyZV9rZXkiOiJza19odzd1eXFKWmlfeEFacThCRmlSLWYiLCJhcGlfa2V5IjoiMDFLMFlSU1RFNDJHQVZLOUgwOFBDRlYwWTAiLCJ0ZW5hbnRfaWQiOiIyMTBjZjZmZjU3MmQ1NDNlNzBmYjYyOTFiNTg0YzBjNjcyYTU4MTZkNDczMjFkMzhhNTE4NDg1NjFlYjE1ODk1IiwiaW50ZXJuYWxfc2VjcmV0IjoiYjhmZmViZDQtZDk2OS00ZTI0LWIzODMtODlmNDNjN2JjYzIwIn0.kC-bxlNjg_cRvUx4QO_1p8AYGgUsSIVOEoSNXCFy9NU"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model UserPreference {
+  id                Int      @id @default(autoincrement())
+  name              String
+  age               Int
+  gender            String
+  dietaryPreference String
+  spicinessLevel    String
+  cuisinePreferences String[]
+  ingredientDislikes String[]
+  cookName          String
+  cookWhatsApp      String
+  preferredLanguage String
+  userWhatsApp      String
+  mealsPerDay       Int
+  breakfast         Boolean
+  lunch             Boolean
+  dinner            Boolean
+  createdAt         DateTime @default(now())
+
+  recipes           UserRecipeSuggestion[]
+}
+
+model Recipe {
+  id                 Int      @id @default(autoincrement())
+  name               String
+  description        String
+  ingredients        String[]
+  instructions       String
+  youtube            String
+  image              String
+  mealType           String
+  cuisine            String
+  dietaryRestriction String
+  createdAt          DateTime @default(now())
+
+  suggestions        UserRecipeSuggestion[]
+}
+
+model UserRecipeSuggestion {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  recipeId  Int
+  date      DateTime  @default(now())
+
+  user      UserPreference @relation(fields: [userId], references: [id])
+  recipe    Recipe         @relation(fields: [recipeId], references: [id])
+}
