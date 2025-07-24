@@ -46,7 +46,6 @@ class MealSuggestionService {
       if (!this.model) {
         await this.initializeModel();
       }
-
       const suggestions = {};
       
       for (const mealType of selectedMeals) {
@@ -116,10 +115,8 @@ class MealSuggestionService {
       ingredientDislikes,
       preferredLanguage
     } = userData;
-
     const prompt = `
 You are a professional chef assistant. Generate exactly 3 ${mealType} suggestions based on these user preferences:
-
 USER PROFILE:
 - Age: ${age}
 - Gender: ${gender}
@@ -128,7 +125,6 @@ USER PROFILE:
 - Cuisine Preferences: ${cuisinePreferences}
 - Ingredient Dislikes: ${ingredientDislikes}
 - Preferred Language: ${preferredLanguage}
-
 REQUIREMENTS:
 1. Provide exactly 3 different ${mealType} options
 2. Each suggestion must be suitable for ${dietaryPreference} diet
@@ -136,7 +132,6 @@ REQUIREMENTS:
 4. Avoid ingredients: ${ingredientDislikes}
 5. Focus on ${cuisinePreferences} cuisine styles
 6. Consider age-appropriate portions and nutrition
-
 FORMAT YOUR RESPONSE EXACTLY AS JSON:
 {
   "suggestions": [
@@ -166,16 +161,14 @@ FORMAT YOUR RESPONSE EXACTLY AS JSON:
         "carbs": "carb content"
       },
       "searchTerms": {
-        "youtube": "specific search term for YouTube video",
+        "youtube": "authentic Dish Name recipe tutorial in ${preferredLanguage} for ${dietaryPreference}",
         "image": "specific search term for food image"
       }
     }
   ]
 }
-
 Make sure the response is valid JSON and includes all required fields.
 `;
-
     return prompt;
   }
 
@@ -216,7 +209,6 @@ Make sure the response is valid JSON and includes all required fields.
           };
         })
       );
-
       return {
         suggestions: enhancedSuggestions,
         totalCount: enhancedSuggestions.length,
@@ -252,13 +244,12 @@ Make sure the response is valid JSON and includes all required fields.
           title: `Search: ${searchTerm} recipe`
         };
       }
-
       // Get language codes for search
       const languageCodes = this.getLanguageCodes(preferredLanguage);
       
       let bestVideo = null;
-      let bestScore = 0;
-      
+      let bestScore = -Infinity; // Initialize with negative infinity to ensure any video is better
+
       // Search in preferred language first, then fallback to English
       for (const langCode of languageCodes) {
         const searchUrl = `https://www.googleapis.com/youtube/v3/search?` +
@@ -299,8 +290,10 @@ Make sure the response is valid JSON and includes all required fields.
           continue;
         }
         
-        // If we found a good video in preferred language, break
-        if (bestVideo && langCode === languageCodes[0]) break;
+        // If we found a good video in preferred language, break (optional, depends on strictness)
+        // If you want to absolutely pick the best across all languages, remove this break.
+        // Given the goal of "most liked", it's better to iterate all to find the global best.
+        // if (bestVideo && langCode === languageCodes[0]) break; 
       }
       
       // If no video found via API, return search link
@@ -335,7 +328,7 @@ Make sure the response is valid JSON and includes all required fields.
   async getVideoDetails(videoId, apiKey) {
     try {
       const detailsUrl = `https://www.googleapis.com/youtube/v3/videos?` +
-        `part=statistics,snippet&id=${videoId}&key=${apiKey}`;
+        `part=statistics,snippet,contentDetails&id=${videoId}&key=${apiKey}`; // Added contentDetails for duration
       
       const response = await fetch(detailsUrl);
       const data = await response.json();
@@ -352,7 +345,7 @@ Make sure the response is valid JSON and includes all required fields.
   }
 
   /**
-   * Calculate video score based on various factors
+   * Calculate video score based on various factors, prioritizing likes.
    * @param {Object} videoData - Video data from YouTube API
    * @param {string} preferredLanguage - User's preferred language
    * @param {string} videoLanguage - Video's language code
@@ -362,38 +355,45 @@ Make sure the response is valid JSON and includes all required fields.
     let score = 0;
     const stats = videoData.statistics;
     const snippet = videoData.snippet;
-    
-    // Like count (30% weight)
+
+    // --- High priority to Like count ---
     const likeCount = parseInt(stats.likeCount || 0);
-    const viewCount = parseInt(stats.viewCount || 0);
-    const likeRatio = viewCount > 0 ? (likeCount / viewCount) * 100 : 0;
-    score += likeRatio * 0.3;
-    
-    // View count (25% weight) - logarithmic scale
-    if (viewCount > 0) {
-      score += Math.log10(viewCount) * 0.25 * 10;
+    const viewCount = parseInt(stats.viewCount || 0); // Keep viewCount for like-to-view ratio
+
+    // Give a very high weight to likeCount, possibly using a logarithmic scale
+    // to handle large numbers and still differentiate between them.
+    if (likeCount > 0) {
+      score += Math.log10(likeCount) * 10; // Adjust the multiplier (10) as needed
     }
-    
-    // Recency (20% weight) - newer videos get higher score
+
+    // --- Secondary factors with less weight ---
+
+    // View count (e.g., 15% of total influence)
+    if (viewCount > 0) {
+      score += Math.log10(viewCount) * 0.5; // Smaller multiplier than likes
+    }
+
+    // Recency (e.g., 10% of total influence) - Newer videos still get a boost
     const publishDate = new Date(snippet.publishedAt);
     const daysSincePublish = (Date.now() - publishDate.getTime()) / (1000 * 60 * 60 * 24);
-    const recencyScore = Math.max(0, 100 - (daysSincePublish / 365) * 50); // Decay over 2 years
-    score += recencyScore * 0.2;
-    
-    // Language preference (15% weight)
+    // Score decays over time, max score for recent, min for very old
+    const recencyScore = Math.max(0, 100 - (daysSincePublish / 365) * 20); // Decays slower than before
+    score += recencyScore * 0.1;
+
+    // Language preference (e.g., 5% of total influence) - Important but not as much as likes
     const primaryLanguageCode = this.getLanguageCodes(preferredLanguage)[0];
     if (videoLanguage === primaryLanguageCode) {
-      score += 15;
-    }
-    
-    // Video duration preference (10% weight) - prefer 5-20 minute videos
-    const duration = this.parseDuration(videoData.contentDetails?.duration);
-    if (duration >= 300 && duration <= 1200) { // 5-20 minutes
-      score += 10;
-    } else if (duration >= 180 && duration <= 1800) { // 3-30 minutes
       score += 5;
     }
-    
+
+    // Video duration preference (e.g., 5% of total influence) - Keep a minor preference for typical recipe lengths
+    const duration = this.parseDuration(videoData.contentDetails?.duration);
+    if (duration >= 300 && duration <= 1200) { // 5-20 minutes
+      score += 5;
+    } else if (duration >= 180 && duration <= 1800) { // 3-30 minutes
+      score += 2;
+    }
+
     return score;
   }
 
@@ -416,7 +416,7 @@ Make sure the response is valid JSON and includes all required fields.
   }
 
   /**
-   * Get language codes for YouTube search
+   * Get language codes for Youtube
    * @param {string} language - Language name
    * @returns {Array<string>} - Array of language codes to try
    */
