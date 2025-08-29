@@ -1,0 +1,1 @@
+ALTER TABLE "userPreferences" ADD COLUMN "onboarded" boolean DEFAULT false;

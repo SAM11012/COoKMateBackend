@@ -1,8 +1,8 @@
 
 // routes/mealRoutes.js
-const express = require('express');
+import express from 'express';
+import MealSuggestionService from './mealSuggestionService.js';
 const recipeRouter = express.Router();
-const MealSuggestionService = require('./mealSuggestionService');
 
 // Initialize meal service with API key from environment
 const mealService = new MealSuggestionService(process.env.GEMINI_API_KEY);
@@ -145,4 +145,4 @@ recipeRouter.post('/validate-user', (req, res) => {
   }
 });
 
-module.exports = recipeRouter;
+export default recipeRouter;

@@ -1,4 +1,4 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 class MealSuggestionService {
   constructor(apiKey) {
@@ -504,4 +504,4 @@ Make sure the response is valid JSON and includes all required fields.
   }
 }
 
-module.exports = MealSuggestionService;
+export default MealSuggestionService;
